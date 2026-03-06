@@ -9,81 +9,124 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body>
-  <div class="app-header">
+
+  <div class="hero">
+    <div class="hero-glow"></div>
     <div class="container">
-      <h1>Calorie Tracker</h1>
-      <p class="subtitle">Monitora la tua alimentazione</p>
+      <div class="hero-content">
+        <h1>Calorie Tracker</h1>
+        <p class="tagline">Il tuo diario alimentare intelligente</p>
+      </div>
     </div>
   </div>
 
-  <div class="container">
-    <div class="dashboard">
-      <div class="card" id="card-goal">
-        <div class="card-icon">&#127919;</div>
-        <span class="card-label">Obiettivo</span>
-        <span class="card-value" id="goal-value">--</span>
-        <span class="card-unit">kcal</span>
+  <div class="container main-content">
+
+    <!-- Ring + Stats inline -->
+    <div class="stats-row fade-in">
+      <div class="ring-container">
+        <svg class="ring-svg" viewBox="0 0 120 120">
+          <circle class="ring-bg" cx="60" cy="60" r="52" />
+          <circle class="ring-fill" id="ring-fill" cx="60" cy="60" r="52" />
+        </svg>
+        <div class="ring-center">
+          <span class="ring-pct" id="progress-pct">0%</span>
+          <span class="ring-label">completato</span>
+        </div>
       </div>
-      <div class="card" id="card-consumed">
-        <div class="card-icon">&#127860;</div>
-        <span class="card-label">Consumate</span>
-        <span class="card-value" id="consumed-value">--</span>
-        <span class="card-unit">kcal</span>
-      </div>
-      <div class="card" id="card-remaining">
-        <div class="card-icon">&#9889;</div>
-        <span class="card-label">Rimanenti</span>
-        <span class="card-value" id="remaining-value">--</span>
-        <span class="card-unit">kcal</span>
+      <div class="stats-cards">
+        <div class="stat-card" id="card-goal">
+          <span class="stat-dot dot-violet"></span>
+          <div class="stat-text">
+            <span class="stat-value" id="goal-value">--</span>
+            <span class="stat-label">Obiettivo</span>
+          </div>
+        </div>
+        <div class="stat-card" id="card-consumed">
+          <span class="stat-dot dot-coral"></span>
+          <div class="stat-text">
+            <span class="stat-value" id="consumed-value">--</span>
+            <span class="stat-label">Consumate</span>
+          </div>
+        </div>
+        <div class="stat-card" id="card-remaining">
+          <span class="stat-dot dot-mint"></span>
+          <div class="stat-text">
+            <span class="stat-value" id="remaining-value">--</span>
+            <span class="stat-label">Rimanenti</span>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="progress-bar-container">
+    <!-- Hidden progress bar for JS compat -->
+    <div style="display:none">
       <div class="progress-bar" id="progress-bar"></div>
     </div>
-    <div class="progress-label">
-      <span id="progress-pct">0%</span> del tuo obiettivo
-    </div>
 
-    <div class="forms">
-      <form id="goal-form" class="form-section">
-        <h2>Obiettivo giornaliero</h2>
-        <div class="form-row">
-          <input type="number" id="goal-input" min="1" inputmode="numeric" placeholder="es: 2200" required>
-          <button type="submit">Imposta</button>
+    <!-- Goal Form -->
+    <form id="goal-form" class="form-card glass fade-in" style="animation-delay: 0.15s">
+      <div class="form-label-row">
+        <span class="form-badge badge-violet">Obiettivo</span>
+      </div>
+      <div class="inline-form">
+        <div class="field">
+          <input type="text" id="goal-input" inputmode="numeric" pattern="[0-9]*" placeholder="2200" autocomplete="off" required>
+          <span class="field-unit">kcal</span>
         </div>
-      </form>
+        <button type="submit" class="btn-primary">Imposta</button>
+      </div>
+    </form>
 
-      <form id="entry-form" class="form-section">
-        <h2>Aggiungi pasto</h2>
-        <div class="form-row form-row-meal">
-          <select id="meal-select" required>
-            <option value="">Seleziona pasto</option>
-            <option value="colazione">&#127774; Colazione</option>
-            <option value="pranzo">&#9728;&#65039; Pranzo</option>
-            <option value="cena">&#127769; Cena</option>
-            <option value="spuntino">&#127822; Spuntino</option>
-          </select>
-          <input type="text" id="desc-input" placeholder="Cosa hai mangiato?" required>
+    <!-- Entry Form -->
+    <form id="entry-form" class="form-card glass fade-in" style="animation-delay: 0.25s">
+      <div class="form-label-row">
+        <span class="form-badge badge-coral">Nuovo pasto</span>
+      </div>
+      <div class="field-stack">
+        <div class="field-row-2">
+          <div class="field field-select">
+            <select id="meal-select" required>
+              <option value="">Pasto...</option>
+              <option value="colazione">Colazione</option>
+              <option value="pranzo">Pranzo</option>
+              <option value="cena">Cena</option>
+              <option value="spuntino">Spuntino</option>
+            </select>
+            <svg class="select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          <div class="field">
+            <input type="text" id="kcal-input" inputmode="numeric" pattern="[0-9]*" placeholder="0" autocomplete="off" required>
+            <span class="field-unit">kcal</span>
+          </div>
         </div>
-        <div class="form-row form-row-submit">
-          <input type="number" id="kcal-input" min="1" inputmode="numeric" placeholder="Calorie (kcal)" required>
-          <button type="submit">Aggiungi</button>
+        <div class="field field-full">
+          <input type="text" id="desc-input" placeholder="Cosa hai mangiato?" autocomplete="off" required>
         </div>
-      </form>
-    </div>
+        <button type="submit" class="btn-primary btn-block">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          Aggiungi
+        </button>
+      </div>
+    </form>
 
-    <div class="entries-section">
+    <!-- Entries -->
+    <div class="entries-section glass fade-in" style="animation-delay: 0.35s">
       <div class="entries-header">
         <h2>Pasti di oggi</h2>
-        <button id="reset-btn" class="btn-danger">Reset giornata</button>
+        <button id="reset-btn" class="btn-ghost-danger">Reset</button>
       </div>
       <div id="entries-list"></div>
-      <p id="empty-msg" class="empty-msg">Nessun pasto registrato oggi.</p>
+      <div id="empty-msg" class="empty-state">
+        <div class="empty-icon">&#127869;</div>
+        <p>Nessun pasto registrato</p>
+        <span>Aggiungi il tuo primo pasto</span>
+      </div>
     </div>
+
   </div>
 
   <script src="app.js"></script>
