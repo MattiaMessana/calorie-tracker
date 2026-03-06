@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Calorie Tracker</title>
+  <link rel="stylesheet" href="styles.css">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-header">
+    <div class="container">
+      <h1>Calorie Tracker</h1>
+      <p class="subtitle">Monitora la tua alimentazione</p>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="dashboard">
+      <div class="card" id="card-goal">
+        <div class="card-icon">&#127919;</div>
+        <span class="card-label">Obiettivo</span>
+        <span class="card-value" id="goal-value">--</span>
+        <span class="card-unit">kcal</span>
+      </div>
+      <div class="card" id="card-consumed">
+        <div class="card-icon">&#127860;</div>
+        <span class="card-label">Consumate</span>
+        <span class="card-value" id="consumed-value">--</span>
+        <span class="card-unit">kcal</span>
+      </div>
+      <div class="card" id="card-remaining">
+        <div class="card-icon">&#9889;</div>
+        <span class="card-label">Rimanenti</span>
+        <span class="card-value" id="remaining-value">--</span>
+        <span class="card-unit">kcal</span>
+      </div>
+    </div>
+
+    <div class="progress-bar-container">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+    <div class="progress-label">
+      <span id="progress-pct">0%</span> del tuo obiettivo
+    </div>
+
+    <div class="forms">
+      <form id="goal-form" class="form-section">
+        <h2>Obiettivo giornaliero</h2>
+        <div class="form-row">
+          <input type="number" id="goal-input" min="1" inputmode="numeric" placeholder="es: 2200" required>
+          <button type="submit">Imposta</button>
+        </div>
+      </form>
+
+      <form id="entry-form" class="form-section">
+        <h2>Aggiungi pasto</h2>
+        <div class="form-row form-row-meal">
+          <select id="meal-select" required>
+            <option value="">Seleziona pasto</option>
+            <option value="colazione">&#127774; Colazione</option>
+            <option value="pranzo">&#9728;&#65039; Pranzo</option>
+            <option value="cena">&#127769; Cena</option>
+            <option value="spuntino">&#127822; Spuntino</option>
+          </select>
+          <input type="text" id="desc-input" placeholder="Cosa hai mangiato?" required>
+        </div>
+        <div class="form-row form-row-submit">
+          <input type="number" id="kcal-input" min="1" inputmode="numeric" placeholder="Calorie (kcal)" required>
+          <button type="submit">Aggiungi</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="entries-section">
+      <div class="entries-header">
+        <h2>Pasti di oggi</h2>
+        <button id="reset-btn" class="btn-danger">Reset giornata</button>
+      </div>
+      <div id="entries-list"></div>
+      <p id="empty-msg" class="empty-msg">Nessun pasto registrato oggi.</p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
