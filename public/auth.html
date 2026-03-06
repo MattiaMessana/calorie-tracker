@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Calorie Tracker - Accedi</title>
+  <link rel="stylesheet" href="styles.css">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    .auth-page {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .auth-glow {
+      position: absolute;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(139, 92, 246, 0.2) 0%, transparent 70%);
+      pointer-events: none;
+      animation: glowPulse 4s ease-in-out infinite alternate;
+    }
+
+    .auth-box {
+      position: relative;
+      width: 100%;
+      max-width: 380px;
+    }
+
+    .auth-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .auth-header h1 {
+      font-size: 1.75rem;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.65) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.3rem;
+    }
+
+    .auth-header p {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+    }
+
+    .auth-form {
+      padding: 1.5rem;
+    }
+
+    .auth-field {
+      margin-bottom: 0.75rem;
+    }
+
+    .auth-field label {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      margin-bottom: 0.4rem;
+    }
+
+    .auth-field .field {
+      width: 100%;
+    }
+
+    .auth-field .field input {
+      width: 100%;
+      padding: 0.8rem 1rem;
+    }
+
+    /* Override browser autofill yellow background */
+    .auth-field .field input:-webkit-autofill,
+    .auth-field .field input:-webkit-autofill:hover,
+    .auth-field .field input:-webkit-autofill:focus,
+    .auth-field .field input:-webkit-autofill:active {
+      -webkit-box-shadow: 0 0 0 50px #161630 inset !important;
+      -webkit-text-fill-color: var(--text) !important;
+      caret-color: var(--text);
+      transition: background-color 5000s ease-in-out 0s;
+    }
+
+    .auth-actions {
+      margin-top: 1.25rem;
+    }
+
+    .auth-actions .btn-primary {
+      width: 100%;
+      padding: 0.85rem;
+      font-size: 0.95rem;
+    }
+
+    .auth-switch {
+      text-align: center;
+      margin-top: 1.25rem;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+    }
+
+    .auth-switch a {
+      color: var(--violet);
+      text-decoration: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .auth-error {
+      background: rgba(249, 112, 102, 0.1);
+      border: 1px solid rgba(249, 112, 102, 0.2);
+      border-radius: var(--r-sm);
+      padding: 0.65rem 0.85rem;
+      margin-bottom: 0.85rem;
+      font-size: 0.8rem;
+      color: var(--coral);
+      display: none;
+    }
+
+    .auth-tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 1.25rem;
+    }
+
+    .auth-tab {
+      flex: 1;
+      padding: 0.65rem;
+      text-align: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      font-family: inherit;
+      transition: color 0.2s ease, border-color 0.2s ease;
+      -webkit-appearance: none;
+    }
+
+    .auth-tab.active {
+      color: var(--text);
+      border-bottom-color: var(--violet);
+    }
+
+    .register-fields {
+      display: none;
+    }
+
+    .register-fields.show {
+      display: block;
+    }
+
+    .field-password {
+      position: relative;
+    }
+
+    .field-password input {
+      padding-right: 2.8rem;
+    }
+
+    .toggle-password {
+      position: absolute;
+      right: 0.6rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.3rem;
+      color: var(--text-muted);
+      transition: color 0.2s ease;
+      -webkit-appearance: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .toggle-password:active {
+      color: var(--violet);
+    }
+
+    .toggle-password svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .toggle-password .icon-hide {
+      display: none;
+    }
+
+    .toggle-password.showing .icon-show {
+      display: none;
+    }
+
+    .toggle-password.showing .icon-hide {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-page">
+    <div class="auth-glow"></div>
+    <div class="auth-box">
+      <div class="auth-header">
+        <h1>Calorie Tracker</h1>
+        <p>Il tuo diario alimentare intelligente</p>
+      </div>
+
+      <div class="auth-form glass">
+        <div class="auth-tabs">
+          <button class="auth-tab active" id="tab-login">Accedi</button>
+          <button class="auth-tab" id="tab-register">Registrati</button>
+        </div>
+
+        <div class="auth-error" id="auth-error"></div>
+
+        <form id="auth-form">
+          <div class="auth-field">
+            <label for="auth-username">Username</label>
+            <div class="field">
+              <input type="text" id="auth-username" placeholder="Il tuo username" autocomplete="username" autocapitalize="none" required>
+            </div>
+          </div>
+
+          <div class="auth-field register-fields" id="register-name-field">
+            <label for="auth-display-name">Nome visualizzato</label>
+            <div class="field">
+              <input type="text" id="auth-display-name" placeholder="Come vuoi essere chiamato?" autocomplete="name">
+            </div>
+          </div>
+
+          <div class="auth-field">
+            <label for="auth-password">Password</label>
+            <div class="field field-password">
+              <input type="password" id="auth-password" placeholder="La tua password" autocomplete="current-password" required>
+              <button type="button" class="toggle-password" data-target="auth-password" aria-label="Mostra password">
+                <svg class="icon-show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="icon-hide" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="auth-field register-fields" id="register-confirm-field">
+            <label for="auth-confirm">Conferma password</label>
+            <div class="field field-password">
+              <input type="password" id="auth-confirm" placeholder="Ripeti la password" autocomplete="new-password">
+              <button type="button" class="toggle-password" data-target="auth-confirm" aria-label="Mostra password">
+                <svg class="icon-show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="icon-hide" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="auth-actions">
+            <button type="submit" class="btn-primary" id="auth-submit">Accedi</button>
+          </div>
+        </form>
+
+        <div class="auth-switch">
+          <span id="switch-text">Non hai un account?</span>
+          <a id="switch-link">Registrati</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    // If already logged in, redirect to home
+    fetch('/api/me').then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.error) window.location.replace('/');
+    }).catch(function () {});
+
+    var isLogin = true;
+    var tabLogin = document.getElementById('tab-login');
+    var tabRegister = document.getElementById('tab-register');
+    var registerFields = document.querySelectorAll('.register-fields');
+    var submitBtn = document.getElementById('auth-submit');
+    var switchText = document.getElementById('switch-text');
+    var switchLink = document.getElementById('switch-link');
+    var errorEl = document.getElementById('auth-error');
+    var form = document.getElementById('auth-form');
+    var usernameInput = document.getElementById('auth-username');
+    var passwordInput = document.getElementById('auth-password');
+    var confirmInput = document.getElementById('auth-confirm');
+    var displayNameInput = document.getElementById('auth-display-name');
+
+    function setMode(login) {
+      isLogin = login;
+      tabLogin.classList.toggle('active', login);
+      tabRegister.classList.toggle('active', !login);
+      registerFields.forEach(function (el) { el.classList.toggle('show', !login); });
+      submitBtn.textContent = login ? 'Accedi' : 'Crea account';
+      switchText.textContent = login ? 'Non hai un account?' : 'Hai già un account?';
+      switchLink.textContent = login ? 'Registrati' : 'Accedi';
+      passwordInput.autocomplete = login ? 'current-password' : 'new-password';
+      errorEl.style.display = 'none';
+    }
+
+    tabLogin.addEventListener('click', function () { setMode(true); });
+    tabRegister.addEventListener('click', function () { setMode(false); });
+    switchLink.addEventListener('click', function () { setMode(!isLogin); });
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.style.display = 'block';
+    }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      errorEl.style.display = 'none';
+
+      var username = usernameInput.value.trim();
+      var password = passwordInput.value;
+
+      if (!username || !password) return showError('Compila tutti i campi');
+
+      if (!isLogin) {
+        var confirm = confirmInput.value;
+        if (password !== confirm) return showError('Le password non coincidono');
+        if (password.length < 6) return showError('Password: minimo 6 caratteri');
+
+        var body = { username: username, password: password };
+        var dn = displayNameInput.value.trim();
+        if (dn) body.displayName = dn;
+
+        fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) return showError(data.error);
+          window.location.replace('/');
+        })
+        .catch(function () { showError('Errore di connessione'); });
+      } else {
+        fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: username, password: password }),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) return showError(data.error);
+          window.location.replace('/');
+        })
+        .catch(function () { showError('Errore di connessione'); });
+      }
+    });
+
+    // Toggle password visibility
+    document.querySelectorAll('.toggle-password').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var input = document.getElementById(btn.getAttribute('data-target'));
+        if (!input) return;
+        var showing = input.type === 'text';
+        input.type = showing ? 'password' : 'text';
+        btn.classList.toggle('showing', !showing);
+        btn.setAttribute('aria-label', showing ? 'Mostra password' : 'Nascondi password');
+      });
+    });
+  })();
+  </script>
+</body>
+</html>

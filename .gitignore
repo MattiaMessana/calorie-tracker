@@ -20,8 +20,8 @@ Thumbs.db
 # Claude Code
 .claude/settings.local.json
 
-# Data (runtime generated)
-data/db.json
+# Data (runtime generated, contains sensitive user data)
+data/
 
 # Logs
 *.log
