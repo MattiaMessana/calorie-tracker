@@ -236,6 +236,22 @@
       if (pepisWelcome) { pepisWelcome.remove(); pepisWelcome = null; }
     }
 
+    // ============================================================
+    // Safari mobile keyboard fix
+    // ============================================================
+    chatInput.addEventListener('focus', function () {
+      setTimeout(function () {
+        scrollChat();
+        // Force Safari to recompute layout after keyboard opens
+        window.scrollTo(0, 0);
+      }, 300);
+    });
+
+    // Prevent iOS bounce when touching chat area
+    chatMessages.addEventListener('touchmove', function (e) {
+      e.stopPropagation();
+    }, { passive: true });
+
     // Pepis Chat
     // ============================================================
     function scrollChat() { chatMessages.scrollTop = chatMessages.scrollHeight; }
