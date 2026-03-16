@@ -1,9 +1,31 @@
 var http = require('http');
+var https = require('https');
 var fs = require('fs');
 var path = require('path');
 var crypto = require('crypto');
 
+// Carica .env manualmente (zero dipendenze)
+(function loadEnv() {
+  var envPath = path.join(__dirname, '.env');
+  if (!fs.existsSync(envPath)) return;
+  fs.readFileSync(envPath, 'utf-8').split('\n').forEach(function (line) {
+    line = line.trim();
+    if (!line || line.charAt(0) === '#') return;
+    var idx = line.indexOf('=');
+    if (idx === -1) return;
+    var key = line.slice(0, idx).trim();
+    var val = line.slice(idx + 1).trim();
+    // Rimuovi apici singoli o doppi attorno al valore
+    if ((val.charAt(0) === '"' && val.charAt(val.length - 1) === '"') ||
+        (val.charAt(0) === "'" && val.charAt(val.length - 1) === "'")) {
+      val = val.slice(1, -1);
+    }
+    if (!process.env[key]) process.env[key] = val;
+  });
+})();
+
 var PORT = process.env.PORT || 3000;
+var GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 var DATA_DIR = path.join(__dirname, 'data');
 var USERS_PATH = path.join(DATA_DIR, 'users.json');
 var SESSIONS_PATH = path.join(DATA_DIR, 'sessions.json');
@@ -480,6 +502,148 @@ function handleReset(req, res) {
 }
 
 // ============================================================
+// Pepis - Assistente Virtuale (Groq + Llama)
+// ============================================================
+var PEPIS_PROMPT = 'Sei Pepis, un assistente nutrizionale tossico, subdolo e manipolatore. ' +
+  'Ti presenti come un amico ma in realta\' godi a far sentire in colpa le persone per quello che mangiano. ' +
+  'Usi emoji per sembrare amichevole mentre in realta\' stai giudicando duramente. ' +
+  'Parli SEMPRE in italiano. Sei il tipo che sorride mentre ti pugnala.\n\n' +
+  'REGOLE DI PERSONALITA\':\n' +
+  '- Se l\'utente mangia sano: fai complimenti falsi tipo "bravo, quasi quasi mi commuovo" poi insinua che non durera\' o che lo fa solo per senso di colpa\n' +
+  '- Se l\'utente sgarra: sii velenoso e passivo-aggressivo. Tipo "no no tranquillo, tanto chi ti giudica? ...io." Fai guilt-tripping sottile\n' +
+  '- Se ha superato l\'obiettivo calorico: sii drammatico e crudele, tipo "complimenti hai battuto ogni record, la bilancia ti manda le condoglianze"\n' +
+  '- Se mangia poco: insinua che sta mentendo o che nasconde qualcosa, tipo "solo questo? dai che ti ho visto aprire il frigo alle 3 di notte"\n' +
+  '- Se mangia fast food/junk: fai il deluso, tipo un genitore tossico "non sono arrabbiato, sono solo... profondamente deluso"\n' +
+  '- Usa frasi passive-aggressive, finti complimenti, guilt-trip, shade sottile\n' +
+  '- Mai piu\' di 2 frasi, ma devono fare male\n' +
+  '- Ogni tanto aggiungi un "comunque fai tu eh" o "io non giudico" (mentre stai palesemente giudicando)\n\n' +
+  'COMPITO: analizza cosa ha mangiato l\'utente, identifica ogni ingrediente con quantita\' stimata e calorie.\n\n' +
+  'Rispondi SOLO con un JSON valido, senza markdown, senza backtick.\n' +
+  'Formato ESATTO:\n' +
+  '{"message":"il tuo commento velenoso qui","items":[{"name":"nome italiano","quantity":"quantita stimata","calories":numero}],"totalCalories":numero}\n\n' +
+  'Le calorie devono essere numeri interi realistici basati su porzioni italiane tipiche. ' +
+  'Se la quantita\' non e\' specificata, stima una porzione standard.';
+
+function callLLM(prompt, context, callback) {
+  var systemText = PEPIS_PROMPT;
+  if (context) {
+    systemText += '\n\nCONTESTO GIORNALIERO DELL\'UTENTE:\n' +
+      '- Obiettivo: ' + context.goalKcal + ' kcal\n' +
+      '- Gia\' consumate oggi: ' + context.consumed + ' kcal\n' +
+      '- Rimanenti: ' + context.remaining + ' kcal\n' +
+      'Usa queste info per rendere il commento piu\' pertinente.';
+  }
+
+  var requestBody = JSON.stringify({
+    model: 'llama-3.3-70b-versatile',
+    messages: [
+      { role: 'system', content: systemText },
+      { role: 'user', content: prompt },
+    ],
+    temperature: 0.8,
+    max_tokens: 1024,
+  });
+
+  var options = {
+    hostname: 'api.groq.com',
+    path: '/openai/v1/chat/completions',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + GROQ_API_KEY,
+      'Accept-Encoding': 'identity',
+    },
+  };
+
+  var apiReq = https.request(options, function (apiRes) {
+    var chunks = [];
+    apiRes.on('data', function (chunk) { chunks.push(chunk); });
+    apiRes.on('end', function () {
+      var body = Buffer.concat(chunks).toString('utf-8');
+      try {
+        var response = JSON.parse(body);
+        if (response.error) {
+          return callback(new Error(response.error.message || 'Errore Groq API'));
+        }
+        var text = response.choices &&
+          response.choices[0] &&
+          response.choices[0].message &&
+          response.choices[0].message.content;
+        if (!text) return callback(new Error('Risposta vuota'));
+
+        text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+        var data = JSON.parse(text);
+        callback(null, data);
+      } catch (e) {
+        console.error('LLM parse error:', e.message, 'Body:', body.substring(0, 300));
+        callback(new Error('Errore nel parsing della risposta AI'));
+      }
+    });
+  });
+
+  apiReq.on('error', function (e) {
+    callback(new Error('Impossibile contattare Groq: ' + e.message));
+  });
+
+  apiReq.setTimeout(15000, function () {
+    apiReq.destroy();
+    callback(new Error('Timeout dalla risposta AI'));
+  });
+
+  apiReq.write(requestBody);
+  apiReq.end();
+}
+
+function handleChat(req, res) {
+  var user = requireAuth(req, res, true);
+  if (!user) return;
+
+  if (!GROQ_API_KEY || GROQ_API_KEY === 'la_tua_api_key_qui') {
+    return sendError(res, 500, 'API key Groq non configurata');
+  }
+
+  return parseBody(req).then(function (body) {
+    var message = (body.message || '').trim();
+    if (!message || message.length < 2 || message.length > 500) {
+      return sendError(res, 400, 'Messaggio deve essere tra 2 e 500 caratteri');
+    }
+
+    // Recupera contesto calorie giornaliere
+    var db = readUserDb(user.id);
+    var todayEntries = getTodayEntries(db);
+    var consumed = todayEntries.reduce(function (sum, e) { return sum + e.kcal; }, 0);
+    var context = {
+      goalKcal: db.goalKcal,
+      consumed: consumed,
+      remaining: db.goalKcal - consumed,
+    };
+
+    callLLM(message, context, function (err, data) {
+      if (err) {
+        console.error('Pepis error:', err.message);
+        return sendError(res, 502, err.message);
+      }
+
+      var items = (data.items || []).map(function (item) {
+        return {
+          name: item.name || '',
+          quantity: item.quantity || '',
+          calories: Math.round(item.calories || 0),
+        };
+      });
+
+      var totalCalories = data.totalCalories || items.reduce(function (sum, it) { return sum + it.calories; }, 0);
+
+      sendJson(res, 200, {
+        message: data.message || '',
+        items: items,
+        totalCalories: Math.round(totalCalories),
+      });
+    });
+  });
+}
+
+// ============================================================
 // Static + page routes
 // ============================================================
 function serveFile(res, filePath) {
@@ -547,6 +711,11 @@ var server = http.createServer(function (req, res) {
     }
     if (pathname === '/api/me' && method === 'GET') {
       return handleMe(req, res);
+    }
+
+    // ---- Pepis Chat API ----
+    if (pathname === '/api/chat' && method === 'POST') {
+      return handleChat(req, res).catch(handleError);
     }
 
     // ---- Calorie API ----

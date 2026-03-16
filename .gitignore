@@ -16,6 +16,9 @@ Thumbs.db
 
 # Claude
 .claude/
+claude.md
+docs/
+references/
 
 # Runtime data
 data/*
