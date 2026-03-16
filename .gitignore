@@ -10,22 +10,19 @@ node_modules/
 .DS_Store
 Thumbs.db
 
-# IDE / Editor
+# IDE
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
 
-# Claude Code
-.claude/settings.local.json
+# Claude
+.claude/
 
-# Data (runtime generated, contains sensitive user data)
-data/
+# Runtime data
+data/*
+!data/.gitkeep
 
 # Logs
 *.log
-npm-debug.log*
 
 # Temp
 *.tmp
