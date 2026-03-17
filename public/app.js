@@ -292,6 +292,45 @@
     function loadState() { api('GET', '/api/state').then(render); }
 
     // ============================================================
+    // Persistenza chat lato server
+    // ============================================================
+    function loadChatHistory() {
+      api('GET', '/api/chat/history').then((data) => {
+        if (!data?.messages?.length) return;
+        hideWelcome();
+        data.messages.forEach((entry, idx) => {
+          if (entry.type === 'user' || entry.type === 'pepis') {
+            addBubble(entry.type, entry.text);
+          } else if (entry.type === 'card') {
+            const div = document.createElement('div');
+            div.className = 'chat-calorie-card';
+            div.dataset.chatIndex = idx;
+            const rows = (entry.items || []).map((it) =>
+              '<div class="calorie-row">' +
+                '<div class="calorie-row-left">' +
+                  `<span class="calorie-row-name">${esc(it.name)}</span>` +
+                  `<span class="calorie-row-qty">${esc(it.quantity)}</span>` +
+                '</div>' +
+                `<span class="calorie-row-kcal">${it.calories}</span>` +
+              '</div>'
+            ).join('');
+            div.innerHTML =
+              `<div class="calorie-card-items">${rows}</div>` +
+              `<div class="calorie-card-total">` +
+                `<span>Totale</span>` +
+                `<span class="calorie-total-value">${entry.totalCalories} kcal</span>` +
+              `</div>` +
+              (entry.added
+                ? `<button class="btn-add-meal added" disabled>Aggiunto!</button>`
+                : `<button class="btn-add-meal" disabled>Aggiungi ai pasti</button>`);
+            chatMessages.appendChild(div);
+          }
+        });
+        scrollChat();
+      });
+    }
+
+    // ============================================================
     // Toast di successo
     // ============================================================
     function showSuccessToast(msg) {
@@ -482,6 +521,10 @@
             btn.textContent = 'Aggiunto!';
             btn.classList.add('added');
 
+            // Marca la card come aggiunta sul server
+            const cardIdx = parseInt(div.dataset.chatIndex, 10);
+            if (!isNaN(cardIdx)) api('POST', '/api/chat/mark-added', { index: cardIdx });
+
             // Animazioni di feedback
             launchConfetti();
             showSuccessToast('Pasto aggiunto!');
@@ -557,6 +600,7 @@
       });
     }
 
+    loadChatHistory();
     loadState();
   }
 })();

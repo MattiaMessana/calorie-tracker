@@ -67,7 +67,6 @@ body {
   -webkit-text-size-adjust: 100%;
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
-  position: fixed;
   width: 100%;
 }
 
@@ -81,6 +80,7 @@ body {
   max-width: 480px;
   margin: 0 auto;
   position: relative;
+  overflow: hidden;
   padding-top: var(--safe-top);
   /* Subtle noise texture feel via gradient */
   background: linear-gradient(180deg, #0d0d22 0%, #08081a 100%);
@@ -502,7 +502,6 @@ body {
   inset: 0;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
   /* Panels slide horizontally */
   will-change: transform, opacity;
 }
@@ -649,22 +648,28 @@ body {
 
 /* ======== PEPIS CHAT ======== */
 .pepis-chat {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 0;
 }
 
 .pepis-messages {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+  height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto !important;
+  overflow-x: hidden;
   padding: 1.25rem 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  scroll-behavior: smooth;
+  display: block;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+.pepis-messages > * + * {
+  margin-top: 1rem;
 }
 
 /* ---- Welcome screen ---- */

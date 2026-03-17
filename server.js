@@ -339,6 +339,53 @@ function writeUserDb(userId, data) {
 }
 
 // ============================================================
+// Chat history helpers
+// ============================================================
+const CHATS_DIR = path.join(DATA_DIR, 'chats');
+const CHAT_MAX_MESSAGES = 50;
+
+function chatDirPath(userId) {
+  const safe = String(userId).replace(/[^a-zA-Z0-9_-]/g, '');
+  return path.join(CHATS_DIR, safe);
+}
+
+function chatFilePath(userId) {
+  return path.join(chatDirPath(userId), 'messages.json');
+}
+
+function ensureChatDir(userId) {
+  const dir = chatDirPath(userId);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+function readChatHistory(userId) {
+  ensureChatDir(userId);
+  const fp = chatFilePath(userId);
+  if (!fs.existsSync(fp)) return [];
+  try { return JSON.parse(fs.readFileSync(fp, 'utf-8')); }
+  catch (e) { return []; }
+}
+
+function appendChatMessages(userId, messages) {
+  ensureChatDir(userId);
+  const fp = chatFilePath(userId);
+  let history = readChatHistory(userId);
+  history.push(...messages);
+  if (history.length > CHAT_MAX_MESSAGES) {
+    history = history.slice(-CHAT_MAX_MESSAGES);
+  }
+  const tmp = fp + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(history, null, 2), 'utf-8');
+  fs.renameSync(tmp, fp);
+}
+
+function clearChatHistory(userId) {
+  ensureChatDir(userId);
+  const fp = chatFilePath(userId);
+  if (fs.existsSync(fp)) fs.unlinkSync(fp);
+}
+
+// ============================================================
 // Request helpers
 // ============================================================
 function parseBody(req) {
@@ -712,6 +759,17 @@ function handleChat(req, res) {
         }));
 
         const totalCalories = data.totalCalories || items.reduce((sum, it) => sum + it.calories, 0);
+        const now = `${italianNow()}${italianOffset()}`;
+
+        // Salva messaggi nella cronologia
+        const newMessages = [
+          { type: 'user', text: message, timestamp: now },
+          { type: 'pepis', text: data.message || '', timestamp: now },
+        ];
+        if (items.length > 0) {
+          newMessages.push({ type: 'card', items, totalCalories: Math.round(totalCalories), added: false, timestamp: now });
+        }
+        appendChatMessages(user.id, newMessages);
 
         sendJson(res, 200, {
           message: data.message || '',
@@ -721,6 +779,42 @@ function handleChat(req, res) {
         resolve();
       });
     });
+  });
+}
+
+// ============================================================
+// Chat history API
+// ============================================================
+function handleGetChatHistory(req, res) {
+  const user = requireAuth(req, res, false);
+  if (!user) return;
+  const messages = readChatHistory(user.id);
+  sendJson(res, 200, { messages });
+}
+
+function handleDeleteChatHistory(req, res) {
+  const user = requireAuth(req, res, true);
+  if (!user) return;
+  clearChatHistory(user.id);
+  sendJson(res, 200, { ok: true });
+}
+
+function handleMarkCardAdded(req, res) {
+  const user = requireAuth(req, res, true);
+  if (!user) return Promise.resolve();
+  return parseBody(req).then((body) => {
+    const idx = body.index;
+    if (typeof idx !== 'number' || idx < 0) return sendError(res, 400, 'Indice non valido');
+    const history = readChatHistory(user.id);
+    if (idx < history.length && history[idx].type === 'card') {
+      history[idx].added = true;
+      ensureChatDir(user.id);
+      const fp = chatFilePath(user.id);
+      const tmp = fp + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify(history, null, 2), 'utf-8');
+      fs.renameSync(tmp, fp);
+    }
+    sendJson(res, 200, { ok: true });
   });
 }
 
@@ -794,6 +888,9 @@ const server = http.createServer((req, res) => {
     if (pathname === '/api/me' && method === 'GET') return handleMe(req, res);
 
     // Pepis Chat API
+    if (pathname === '/api/chat/history' && method === 'GET') return handleGetChatHistory(req, res);
+    if (pathname === '/api/chat/history' && method === 'DELETE') return handleDeleteChatHistory(req, res);
+    if (pathname === '/api/chat/mark-added' && method === 'POST') return handleMarkCardAdded(req, res).catch(handleError);
     if (pathname === '/api/chat' && method === 'POST') return handleChat(req, res).catch(handleError);
 
     // Calorie API
