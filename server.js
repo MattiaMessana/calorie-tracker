@@ -1,37 +1,128 @@
-var http = require('http');
-var https = require('https');
-var fs = require('fs');
-var path = require('path');
-var crypto = require('crypto');
+const http = require('http');
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 
 // Carica .env manualmente (zero dipendenze)
-(function loadEnv() {
-  var envPath = path.join(__dirname, '.env');
+(() => {
+  const envPath = path.join(__dirname, '.env');
   if (!fs.existsSync(envPath)) return;
-  fs.readFileSync(envPath, 'utf-8').split('\n').forEach(function (line) {
+  fs.readFileSync(envPath, 'utf-8').split('\n').forEach((line) => {
     line = line.trim();
     if (!line || line.charAt(0) === '#') return;
-    var idx = line.indexOf('=');
+    const idx = line.indexOf('=');
     if (idx === -1) return;
-    var key = line.slice(0, idx).trim();
-    var val = line.slice(idx + 1).trim();
-    // Rimuovi apici singoli o doppi attorno al valore
-    if ((val.charAt(0) === '"' && val.charAt(val.length - 1) === '"') ||
-        (val.charAt(0) === "'" && val.charAt(val.length - 1) === "'")) {
+    const key = line.slice(0, idx).trim();
+    let val = line.slice(idx + 1).trim();
+    if ((val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))) {
       val = val.slice(1, -1);
     }
     if (!process.env[key]) process.env[key] = val;
   });
 })();
 
-var PORT = process.env.PORT || 3000;
-var GROQ_API_KEY = process.env.GROQ_API_KEY || '';
-var DATA_DIR = path.join(__dirname, 'data');
-var USERS_PATH = path.join(DATA_DIR, 'users.json');
-var SESSIONS_PATH = path.join(DATA_DIR, 'sessions.json');
-var PUBLIC_DIR = path.join(__dirname, 'public');
+const PORT = process.env.PORT || 3000;
+const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+const LOGS_DIR = path.join(__dirname, 'logs');
+const DATA_DIR = path.join(__dirname, 'data');
 
-var MIME_TYPES = {
+// ============================================================
+// Logger — errori strutturati in JSON, timezone Italia
+// ============================================================
+function italianNow() {
+  const now = new Date();
+  const base = now.toLocaleString('sv-SE', {
+    timeZone: 'Europe/Rome',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).replace(',', '').replace(' ', 'T');
+  const ms = String(now.getMilliseconds()).padStart(3, '0');
+  return `${base}.${ms}`;
+}
+
+function italianDate() {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' });
+}
+
+function italianOffset() {
+  const fmt = new Intl.DateTimeFormat('en', { timeZone: 'Europe/Rome', timeZoneName: 'shortOffset' });
+  const parts = fmt.formatToParts(new Date());
+  const tz = parts.find((p) => p.type === 'timeZoneName');
+  if (!tz) return '+01:00';
+  const raw = tz.value.replace('GMT', '');
+  // Normalizza "+1" → "+01:00", "+2" → "+02:00"
+  const match = raw.match(/^([+-])(\d{1,2})(?::?(\d{2}))?$/);
+  if (!match) return '+01:00';
+  return `${match[1]}${match[2].padStart(2, '0')}:${match[3] || '00'}`;
+}
+
+function ensureLogsDir() {
+  if (!fs.existsSync(LOGS_DIR)) fs.mkdirSync(LOGS_DIR, { recursive: true });
+}
+
+function logError({ source = '', method = '', urlPath = '', ip = '', userId = null, message = '', stack = '', details = null }) {
+  try {
+    ensureLogsDir();
+    const date = italianDate();
+    const filePath = path.join(LOGS_DIR, `error_log_${date}.json`);
+
+    const entry = {
+      timestamp: `${italianNow()}${italianOffset()}`,
+      level: 'ERROR',
+      source,
+      method,
+      path: urlPath,
+      ip,
+      userId,
+      message,
+      stack: stack || null,
+      details: details || null,
+    };
+
+    let logs = [];
+    if (fs.existsSync(filePath)) {
+      try { logs = JSON.parse(fs.readFileSync(filePath, 'utf-8')); }
+      catch (e) { logs = []; }
+    }
+    logs.push(entry);
+
+    const tmp = filePath + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(logs, null, 2), 'utf-8');
+    fs.renameSync(tmp, filePath);
+
+    // Stampa anche in console per pm2 logs
+    console.error(`[${entry.timestamp}] ${entry.level} [${source}] ${message}`);
+  } catch (e) {
+    // Fallback: non bloccare il server se il logging fallisce
+    console.error('Logger fallito:', e.message);
+  }
+}
+
+// Pulizia log più vecchi di 30 giorni all'avvio
+(() => {
+  try {
+    ensureLogsDir();
+    const now = Date.now();
+    const maxAge = 30 * 24 * 60 * 60 * 1000;
+    const files = fs.readdirSync(LOGS_DIR).filter((f) => f.startsWith('error_log_') && f.endsWith('.json'));
+    for (const file of files) {
+      const match = file.match(/error_log_(\d{4}-\d{2}-\d{2})\.json/);
+      if (!match) continue;
+      const fileDate = new Date(match[1] + 'T00:00:00');
+      if (now - fileDate.getTime() > maxAge) {
+        fs.unlinkSync(path.join(LOGS_DIR, file));
+        console.log(`Log eliminato (>30gg): ${file}`);
+      }
+    }
+  } catch (e) { /* silenzioso */ }
+})();
+const USERS_PATH = path.join(DATA_DIR, 'users.json');
+const SESSIONS_PATH = path.join(DATA_DIR, 'sessions.json');
+const PUBLIC_DIR = path.join(__dirname, 'public');
+
+const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
@@ -40,20 +131,20 @@ var MIME_TYPES = {
   '.ico': 'image/x-icon',
 };
 
-var VALID_MEALS = ['colazione', 'pranzo', 'cena', 'spuntino'];
-var SESSION_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
-var USERNAME_RE = /^[a-zA-Z0-9_]{3,30}$/;
-var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const VALID_MEALS = ['colazione', 'pranzo', 'cena', 'spuntino'];
+const SESSION_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+const USERNAME_RE = /^[a-zA-Z0-9_]{3,30}$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ============================================================
 // Rate limiter (in-memory, per IP)
 // ============================================================
-var rateLimitMap = {};
-var RATE_WINDOW = 60 * 1000; // 1 min
-var RATE_MAX_AUTH = 10;       // 10 auth attempts per minute
+const rateLimitMap = {};
+const RATE_WINDOW = 60 * 1000;
+const RATE_MAX_AUTH = 10;
 
 function rateLimit(ip, limit) {
-  var now = Date.now();
+  const now = Date.now();
   if (!rateLimitMap[ip] || rateLimitMap[ip].resetAt < now) {
     rateLimitMap[ip] = { count: 0, resetAt: now + RATE_WINDOW };
   }
@@ -61,12 +152,11 @@ function rateLimit(ip, limit) {
   return rateLimitMap[ip].count > limit;
 }
 
-// Cleanup stale entries every 5 min
-setInterval(function () {
-  var now = Date.now();
-  Object.keys(rateLimitMap).forEach(function (ip) {
+setInterval(() => {
+  const now = Date.now();
+  for (const ip of Object.keys(rateLimitMap)) {
     if (rateLimitMap[ip].resetAt < now) delete rateLimitMap[ip];
-  });
+  }
 }, 5 * 60 * 1000);
 
 // ============================================================
@@ -111,7 +201,7 @@ function readJsonFile(filePath, defaultValue) {
 
 function writeJsonFile(filePath, data) {
   ensureDataDir();
-  var tmp = filePath + '.tmp';
+  const tmp = filePath + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf-8');
   fs.renameSync(tmp, filePath);
 }
@@ -128,25 +218,23 @@ function writeUsers(data) {
 }
 
 function findUserByUsername(username) {
-  var db = readUsers();
-  return db.users.find(function (u) {
-    return u.username.toLowerCase() === username.toLowerCase();
-  });
+  const db = readUsers();
+  return db.users.find((u) => u.username.toLowerCase() === username.toLowerCase());
 }
 
 function findUserById(id) {
-  var db = readUsers();
-  return db.users.find(function (u) { return u.id === id; });
+  const db = readUsers();
+  return db.users.find((u) => u.id === id);
 }
 
 function hashPassword(password, salt) {
   if (!salt) salt = crypto.randomBytes(16).toString('hex');
-  var hash = crypto.scryptSync(password, salt, 64).toString('hex');
-  return { hash: hash, salt: salt };
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return { hash, salt };
 }
 
 function verifyPassword(password, hash, salt) {
-  var result = crypto.scryptSync(password, salt, 64).toString('hex');
+  const result = crypto.scryptSync(password, salt, 64).toString('hex');
   return crypto.timingSafeEqual(Buffer.from(result, 'hex'), Buffer.from(hash, 'hex'));
 }
 
@@ -162,27 +250,27 @@ function writeSessions(data) {
 }
 
 function createSession(userId) {
-  var token = crypto.randomBytes(32).toString('hex');
-  var csrfToken = crypto.randomBytes(32).toString('hex');
-  var db = readSessions();
+  const token = crypto.randomBytes(32).toString('hex');
+  const csrfToken = crypto.randomBytes(32).toString('hex');
+  const db = readSessions();
   db.sessions[token] = {
-    userId: userId,
-    csrfToken: csrfToken,
+    userId,
+    csrfToken,
     createdAt: Date.now(),
     expiresAt: Date.now() + SESSION_MAX_AGE,
   };
-  var now = Date.now();
-  Object.keys(db.sessions).forEach(function (t) {
+  const now = Date.now();
+  for (const t of Object.keys(db.sessions)) {
     if (db.sessions[t].expiresAt < now) delete db.sessions[t];
-  });
+  }
   writeSessions(db);
-  return { token: token, csrfToken: csrfToken };
+  return { token, csrfToken };
 }
 
 function getSession(token) {
   if (!token) return null;
-  var db = readSessions();
-  var session = db.sessions[token];
+  const db = readSessions();
+  const session = db.sessions[token];
   if (!session) return null;
   if (session.expiresAt < Date.now()) {
     delete db.sessions[token];
@@ -194,39 +282,39 @@ function getSession(token) {
 
 function destroySession(token) {
   if (!token) return;
-  var db = readSessions();
+  const db = readSessions();
   delete db.sessions[token];
   writeSessions(db);
 }
 
 function parseCookies(req) {
-  var cookies = {};
-  var header = req.headers.cookie || '';
-  header.split(';').forEach(function (c) {
-    var parts = c.trim().split('=');
+  const cookies = {};
+  const header = req.headers.cookie || '';
+  header.split(';').forEach((c) => {
+    const parts = c.trim().split('=');
     if (parts.length >= 2) cookies[parts[0]] = parts.slice(1).join('=');
   });
   return cookies;
 }
 
 function getAuthUser(req) {
-  var cookies = parseCookies(req);
-  var token = cookies.session;
-  var session = getSession(token);
+  const cookies = parseCookies(req);
+  const token = cookies.session;
+  const session = getSession(token);
   if (!session) return null;
-  var user = findUserById(session.userId);
+  const user = findUserById(session.userId);
   if (!user) return null;
-  return { user: user, token: token, csrfToken: session.csrfToken };
+  return { user, token, csrfToken: session.csrfToken };
 }
 
 function verifyCsrf(req, auth) {
-  var headerToken = req.headers['x-csrf-token'] || '';
+  const headerToken = req.headers['x-csrf-token'] || '';
   return headerToken === auth.csrfToken;
 }
 
 function sessionCookie(token, maxAge) {
-  var parts = ['session=' + token, 'HttpOnly', 'Path=/', 'SameSite=Strict'];
-  if (typeof maxAge === 'number') parts.push('Max-Age=' + maxAge);
+  const parts = [`session=${token}`, 'HttpOnly', 'Path=/', 'SameSite=Strict'];
+  if (typeof maxAge === 'number') parts.push(`Max-Age=${maxAge}`);
   return parts.join('; ');
 }
 
@@ -234,8 +322,8 @@ function sessionCookie(token, maxAge) {
 // Per-user DB
 // ============================================================
 function userDbPath(userId) {
-  var safe = userId.replace(/[^a-f0-9-]/gi, '');
-  return path.join(DATA_DIR, 'user_' + safe + '.json');
+  const safe = userId.replace(/[^a-f0-9-]/gi, '');
+  return path.join(DATA_DIR, `user_${safe}.json`);
 }
 
 function getDefaultUserDb() {
@@ -254,13 +342,13 @@ function writeUserDb(userId, data) {
 // Request helpers
 // ============================================================
 function parseBody(req) {
-  return new Promise(function (resolve, reject) {
-    var body = '';
-    req.on('data', function (chunk) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', (chunk) => {
       body += chunk;
       if (body.length > 1e5) { req.destroy(); reject(new Error('Body too large')); }
     });
-    req.on('end', function () {
+    req.on('end', () => {
       try { resolve(JSON.parse(body)); }
       catch (e) { reject(new Error('Invalid JSON')); }
     });
@@ -269,7 +357,7 @@ function parseBody(req) {
 }
 
 function sendJson(res, statusCode, data, extraHeaders) {
-  var headers = Object.assign({ 'Content-Type': 'application/json; charset=utf-8' }, securityHeaders(), extraHeaders || {});
+  const headers = { 'Content-Type': 'application/json; charset=utf-8', ...securityHeaders(), ...extraHeaders };
   res.writeHead(statusCode, headers);
   res.end(JSON.stringify(data));
 }
@@ -279,32 +367,23 @@ function sendError(res, statusCode, message) {
 }
 
 function todayStr() {
-  var d = new Date();
-  return d.getFullYear() + '-' +
-    String(d.getMonth() + 1).padStart(2, '0') + '-' +
-    String(d.getDate()).padStart(2, '0');
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function getTodayEntries(db) {
-  var today = todayStr();
-  return db.entries.filter(function (e) { return e.date === today; });
+  const today = todayStr();
+  return db.entries.filter((e) => e.date === today);
 }
 
 function getClientIp(req) {
   return (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '';
 }
 
-// Auth check + CSRF verify for mutating requests
 function requireAuth(req, res, checkCsrf) {
-  var auth = getAuthUser(req);
-  if (!auth) {
-    sendError(res, 401, 'Non autenticato');
-    return null;
-  }
-  if (checkCsrf && !verifyCsrf(req, auth)) {
-    sendError(res, 403, 'CSRF token non valido');
-    return null;
-  }
+  const auth = getAuthUser(req);
+  if (!auth) { sendError(res, 401, 'Non autenticato'); return null; }
+  if (checkCsrf && !verifyCsrf(req, auth)) { sendError(res, 403, 'CSRF token non valido'); return null; }
   return auth.user;
 }
 
@@ -313,12 +392,12 @@ function requireAuth(req, res, checkCsrf) {
 // ============================================================
 function matchRoute(method, pathname, pattern, reqMethod) {
   if (method !== reqMethod) return null;
-  var patternParts = pattern.split('/');
-  var pathParts = pathname.split('/');
+  const patternParts = pattern.split('/');
+  const pathParts = pathname.split('/');
   if (patternParts.length !== pathParts.length) return null;
-  var params = {};
-  for (var i = 0; i < patternParts.length; i++) {
-    if (patternParts[i].charAt(0) === ':') {
+  const params = {};
+  for (let i = 0; i < patternParts.length; i++) {
+    if (patternParts[i].startsWith(':')) {
       params[patternParts[i].slice(1)] = decodeURIComponent(pathParts[i]);
     } else if (patternParts[i] !== pathParts[i]) {
       return null;
@@ -334,40 +413,32 @@ function handleRegister(req, res) {
   if (rateLimit(getClientIp(req), RATE_MAX_AUTH)) {
     return Promise.resolve(sendError(res, 429, 'Troppi tentativi, riprova tra un minuto'));
   }
-  return parseBody(req).then(function (body) {
-    var username = (body.username || '').trim();
-    var password = body.password || '';
-    var displayName = (body.displayName || username).trim();
+  return parseBody(req).then((body) => {
+    const username = (body.username || '').trim();
+    const password = body.password || '';
+    const displayName = (body.displayName || username).trim();
 
-    if (!USERNAME_RE.test(username)) {
-      return sendError(res, 400, 'Username: 3-30 caratteri, solo lettere, numeri e _');
-    }
-    if (password.length < 6 || password.length > 128) {
-      return sendError(res, 400, 'Password: da 6 a 128 caratteri');
-    }
-    if (displayName.length > 50) {
-      return sendError(res, 400, 'Nome troppo lungo');
-    }
-    if (findUserByUsername(username)) {
-      return sendError(res, 409, 'Username già in uso');
-    }
+    if (!USERNAME_RE.test(username)) return sendError(res, 400, 'Username: 3-30 caratteri, solo lettere, numeri e _');
+    if (password.length < 6 || password.length > 128) return sendError(res, 400, 'Password: da 6 a 128 caratteri');
+    if (displayName.length > 50) return sendError(res, 400, 'Nome troppo lungo');
+    if (findUserByUsername(username)) return sendError(res, 409, 'Username già in uso');
 
-    var hashed = hashPassword(password);
-    var user = {
+    const hashed = hashPassword(password);
+    const user = {
       id: crypto.randomUUID(),
       username: username.toLowerCase(),
-      displayName: displayName,
+      displayName,
       hash: hashed.hash,
       salt: hashed.salt,
       createdAt: new Date().toISOString(),
     };
 
-    var db = readUsers();
+    const db = readUsers();
     db.users.push(user);
     writeUsers(db);
     writeUserDb(user.id, getDefaultUserDb());
 
-    var sess = createSession(user.id);
+    const sess = createSession(user.id);
     sendJson(res, 201, {
       ok: true,
       user: { id: user.id, username: user.username, displayName: user.displayName },
@@ -380,16 +451,16 @@ function handleLogin(req, res) {
   if (rateLimit(getClientIp(req), RATE_MAX_AUTH)) {
     return Promise.resolve(sendError(res, 429, 'Troppi tentativi, riprova tra un minuto'));
   }
-  return parseBody(req).then(function (body) {
-    var username = (body.username || '').trim().toLowerCase();
-    var password = body.password || '';
+  return parseBody(req).then((body) => {
+    const username = (body.username || '').trim().toLowerCase();
+    const password = body.password || '';
 
-    var user = findUserByUsername(username);
+    const user = findUserByUsername(username);
     if (!user || !verifyPassword(password, user.hash, user.salt)) {
       return sendError(res, 401, 'Credenziali non valide');
     }
 
-    var sess = createSession(user.id);
+    const sess = createSession(user.id);
     sendJson(res, 200, {
       ok: true,
       user: { id: user.id, username: user.username, displayName: user.displayName },
@@ -399,13 +470,13 @@ function handleLogin(req, res) {
 }
 
 function handleLogout(req, res) {
-  var auth = getAuthUser(req);
+  const auth = getAuthUser(req);
   if (auth) destroySession(auth.token);
   sendJson(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie('', 0) });
 }
 
 function handleMe(req, res) {
-  var auth = getAuthUser(req);
+  const auth = getAuthUser(req);
   if (!auth) return sendError(res, 401, 'Non autenticato');
   sendJson(res, 200, {
     user: { id: auth.user.id, username: auth.user.username, displayName: auth.user.displayName },
@@ -417,11 +488,11 @@ function handleMe(req, res) {
 // Calorie API (authenticated, CSRF-protected)
 // ============================================================
 function handleGetState(req, res) {
-  var user = requireAuth(req, res, false);
+  const user = requireAuth(req, res, false);
   if (!user) return;
-  var db = readUserDb(user.id);
-  var todayEntries = getTodayEntries(db);
-  var totalKcal = todayEntries.reduce(function (sum, e) { return sum + e.kcal; }, 0);
+  const db = readUserDb(user.id);
+  const todayEntries = getTodayEntries(db);
+  const totalKcal = todayEntries.reduce((sum, e) => sum + e.kcal, 0);
   sendJson(res, 200, {
     goalKcal: db.goalKcal,
     entries: todayEntries,
@@ -430,14 +501,14 @@ function handleGetState(req, res) {
 }
 
 function handlePostGoal(req, res) {
-  var user = requireAuth(req, res, true);
+  const user = requireAuth(req, res, true);
   if (!user) return;
-  return parseBody(req).then(function (body) {
-    var goalKcal = Number(body.goalKcal);
+  return parseBody(req).then((body) => {
+    const goalKcal = Number(body.goalKcal);
     if (!Number.isFinite(goalKcal) || goalKcal <= 0 || goalKcal > 99999) {
       return sendError(res, 400, 'goalKcal deve essere un numero tra 1 e 99999');
     }
-    var db = readUserDb(user.id);
+    const db = readUserDb(user.id);
     db.goalKcal = Math.round(goalKcal);
     writeUserDb(user.id, db);
     handleGetState(req, res);
@@ -445,34 +516,25 @@ function handlePostGoal(req, res) {
 }
 
 function handlePostEntry(req, res) {
-  var user = requireAuth(req, res, true);
+  const user = requireAuth(req, res, true);
   if (!user) return;
-  return parseBody(req).then(function (body) {
-    var meal = body.meal;
-    var description = body.description;
-    var kcal = body.kcal;
-    if (!VALID_MEALS.includes(meal)) {
-      return sendError(res, 400, 'meal deve essere uno tra: ' + VALID_MEALS.join(', '));
-    }
-    if (!description || typeof description !== 'string' || !description.trim()) {
-      return sendError(res, 400, 'description non può essere vuota');
-    }
-    if (typeof description === 'string' && description.length > 200) {
-      return sendError(res, 400, 'description troppo lunga (max 200 caratteri)');
-    }
-    var kcalNum = Number(kcal);
-    if (!Number.isFinite(kcalNum) || kcalNum <= 0 || kcalNum > 99999) {
-      return sendError(res, 400, 'kcal deve essere un numero tra 1 e 99999');
-    }
-    var entry = {
+  return parseBody(req).then((body) => {
+    const { meal, description, kcal } = body;
+    if (!VALID_MEALS.includes(meal)) return sendError(res, 400, `meal deve essere uno tra: ${VALID_MEALS.join(', ')}`);
+    if (!description || typeof description !== 'string' || !description.trim()) return sendError(res, 400, 'description non può essere vuota');
+    if (description.length > 200) return sendError(res, 400, 'description troppo lunga (max 200 caratteri)');
+    const kcalNum = Number(kcal);
+    if (!Number.isFinite(kcalNum) || kcalNum <= 0 || kcalNum > 99999) return sendError(res, 400, 'kcal deve essere un numero tra 1 e 99999');
+
+    const entry = {
       id: crypto.randomUUID(),
       date: todayStr(),
-      meal: meal,
+      meal,
       description: description.trim(),
       kcal: Math.round(kcalNum),
       createdAt: new Date().toISOString(),
     };
-    var db = readUserDb(user.id);
+    const db = readUserDb(user.id);
     db.entries.push(entry);
     writeUserDb(user.id, db);
     handleGetState(req, res);
@@ -480,11 +542,11 @@ function handlePostEntry(req, res) {
 }
 
 function handleDeleteEntry(req, res, entryId) {
-  var user = requireAuth(req, res, true);
+  const user = requireAuth(req, res, true);
   if (!user) return;
   if (!UUID_RE.test(entryId)) return sendError(res, 400, 'ID non valido');
-  var db = readUserDb(user.id);
-  var idx = db.entries.findIndex(function (e) { return e.id === entryId; });
+  const db = readUserDb(user.id);
+  const idx = db.entries.findIndex((e) => e.id === entryId);
   if (idx === -1) return sendError(res, 404, 'Entry non trovata');
   db.entries.splice(idx, 1);
   writeUserDb(user.id, db);
@@ -492,11 +554,11 @@ function handleDeleteEntry(req, res, entryId) {
 }
 
 function handleReset(req, res) {
-  var user = requireAuth(req, res, true);
+  const user = requireAuth(req, res, true);
   if (!user) return;
-  var today = todayStr();
-  var db = readUserDb(user.id);
-  db.entries = db.entries.filter(function (e) { return e.date !== today; });
+  const today = todayStr();
+  const db = readUserDb(user.id);
+  db.entries = db.entries.filter((e) => e.date !== today);
   writeUserDb(user.id, db);
   handleGetState(req, res);
 }
@@ -504,7 +566,7 @@ function handleReset(req, res) {
 // ============================================================
 // Pepis - Assistente Virtuale (Groq + Llama)
 // ============================================================
-var PEPIS_PROMPT = 'Sei Pepis, un assistente nutrizionale tossico, subdolo e manipolatore. ' +
+const PEPIS_PROMPT = 'Sei Pepis, un assistente nutrizionale tossico, subdolo e manipolatore. ' +
   'Ti presenti come un amico ma in realta\' godi a far sentire in colpa le persone per quello che mangiano. ' +
   'Usi emoji per sembrare amichevole mentre in realta\' stai giudicando duramente. ' +
   'Parli SEMPRE in italiano. Sei il tipo che sorride mentre ti pugnala.\n\n' +
@@ -525,16 +587,16 @@ var PEPIS_PROMPT = 'Sei Pepis, un assistente nutrizionale tossico, subdolo e man
   'Se la quantita\' non e\' specificata, stima una porzione standard.';
 
 function callLLM(prompt, context, callback) {
-  var systemText = PEPIS_PROMPT;
+  let systemText = PEPIS_PROMPT;
   if (context) {
-    systemText += '\n\nCONTESTO GIORNALIERO DELL\'UTENTE:\n' +
-      '- Obiettivo: ' + context.goalKcal + ' kcal\n' +
-      '- Gia\' consumate oggi: ' + context.consumed + ' kcal\n' +
-      '- Rimanenti: ' + context.remaining + ' kcal\n' +
+    systemText += `\n\nCONTESTO GIORNALIERO DELL'UTENTE:\n` +
+      `- Obiettivo: ${context.goalKcal} kcal\n` +
+      `- Gia' consumate oggi: ${context.consumed} kcal\n` +
+      `- Rimanenti: ${context.remaining} kcal\n` +
       'Usa queste info per rendere il commento piu\' pertinente.';
   }
 
-  var requestBody = JSON.stringify({
+  const requestBody = JSON.stringify({
     model: 'llama-3.3-70b-versatile',
     messages: [
       { role: 'system', content: systemText },
@@ -544,99 +606,98 @@ function callLLM(prompt, context, callback) {
     max_tokens: 1024,
   });
 
-  var options = {
+  const options = {
     hostname: 'api.groq.com',
     path: '/openai/v1/chat/completions',
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + GROQ_API_KEY,
+      'Authorization': `Bearer ${GROQ_API_KEY}`,
       'Accept-Encoding': 'identity',
     },
   };
 
-  var apiReq = https.request(options, function (apiRes) {
-    var chunks = [];
-    apiRes.on('data', function (chunk) { chunks.push(chunk); });
-    apiRes.on('end', function () {
-      var body = Buffer.concat(chunks).toString('utf-8');
+  const apiReq = https.request(options, (apiRes) => {
+    const chunks = [];
+    apiRes.on('data', (chunk) => chunks.push(chunk));
+    apiRes.on('end', () => {
+      const body = Buffer.concat(chunks).toString('utf-8');
       try {
-        var response = JSON.parse(body);
-        if (response.error) {
-          return callback(new Error(response.error.message || 'Errore Groq API'));
-        }
-        var text = response.choices &&
-          response.choices[0] &&
-          response.choices[0].message &&
-          response.choices[0].message.content;
+        const response = JSON.parse(body);
+        if (response.error) return callback(new Error(response.error.message || 'Errore Groq API'));
+
+        let text = response.choices?.[0]?.message?.content;
         if (!text) return callback(new Error('Risposta vuota'));
 
         text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-        var data = JSON.parse(text);
-        callback(null, data);
+        callback(null, JSON.parse(text));
       } catch (e) {
-        console.error('LLM parse error:', e.message, 'Body:', body.substring(0, 300));
+        logError({
+          source: 'callLLM',
+          message: `Parse error: ${e.message}`,
+          stack: e.stack,
+          details: { responseBody: body.substring(0, 500) },
+        });
         callback(new Error('Errore nel parsing della risposta AI'));
       }
     });
   });
 
-  apiReq.on('error', function (e) {
-    callback(new Error('Impossibile contattare Groq: ' + e.message));
-  });
-
-  apiReq.setTimeout(15000, function () {
-    apiReq.destroy();
-    callback(new Error('Timeout dalla risposta AI'));
-  });
-
+  apiReq.on('error', (e) => callback(new Error(`Impossibile contattare Groq: ${e.message}`)));
+  apiReq.setTimeout(15000, () => { apiReq.destroy(); callback(new Error('Timeout dalla risposta AI')); });
   apiReq.write(requestBody);
   apiReq.end();
 }
 
 function handleChat(req, res) {
-  var user = requireAuth(req, res, true);
+  const user = requireAuth(req, res, true);
   if (!user) return;
 
   if (!GROQ_API_KEY || GROQ_API_KEY === 'la_tua_api_key_qui') {
     return sendError(res, 500, 'API key Groq non configurata');
   }
 
-  return parseBody(req).then(function (body) {
-    var message = (body.message || '').trim();
+  return parseBody(req).then((body) => {
+    const message = (body.message || '').trim();
     if (!message || message.length < 2 || message.length > 500) {
       return sendError(res, 400, 'Messaggio deve essere tra 2 e 500 caratteri');
     }
 
-    // Recupera contesto calorie giornaliere
-    var db = readUserDb(user.id);
-    var todayEntries = getTodayEntries(db);
-    var consumed = todayEntries.reduce(function (sum, e) { return sum + e.kcal; }, 0);
-    var context = {
+    const db = readUserDb(user.id);
+    const todayEntries = getTodayEntries(db);
+    const consumed = todayEntries.reduce((sum, e) => sum + e.kcal, 0);
+    const context = {
       goalKcal: db.goalKcal,
-      consumed: consumed,
+      consumed,
       remaining: db.goalKcal - consumed,
     };
 
-    callLLM(message, context, function (err, data) {
+    callLLM(message, context, (err, data) => {
       if (err) {
-        console.error('Pepis error:', err.message);
+        logError({
+          source: 'handleChat',
+          method: 'POST',
+          urlPath: '/api/chat',
+          ip: getClientIp(req),
+          userId: user.id,
+          message: err.message,
+          stack: err.stack,
+          details: { userMessage: message },
+        });
         return sendError(res, 502, err.message);
       }
 
-      var items = (data.items || []).map(function (item) {
-        return {
-          name: item.name || '',
-          quantity: item.quantity || '',
-          calories: Math.round(item.calories || 0),
-        };
-      });
+      const items = (data.items || []).map((item) => ({
+        name: item.name || '',
+        quantity: item.quantity || '',
+        calories: Math.round(item.calories || 0),
+      }));
 
-      var totalCalories = data.totalCalories || items.reduce(function (sum, it) { return sum + it.calories; }, 0);
+      const totalCalories = data.totalCalories || items.reduce((sum, it) => sum + it.calories, 0);
 
       sendJson(res, 200, {
         message: data.message || '',
-        items: items,
+        items,
         totalCalories: Math.round(totalCalories),
       });
     });
@@ -652,24 +713,18 @@ function serveFile(res, filePath) {
     res.writeHead(403, securityHeaders());
     return res.end('Forbidden');
   }
-  var ext = path.extname(filePath);
-  var contentType = MIME_TYPES[ext] || 'application/octet-stream';
-  fs.readFile(filePath, function (err, data) {
-    if (err) {
-      res.writeHead(404, securityHeaders());
-      res.end('Not found');
-      return;
-    }
-    var headers = Object.assign({ 'Content-Type': contentType }, securityHeaders());
-    // Cache static assets (not HTML)
+  const ext = path.extname(filePath);
+  const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+  fs.readFile(filePath, (err, data) => {
+    if (err) { res.writeHead(404, securityHeaders()); res.end('Not found'); return; }
+    const headers = { 'Content-Type': contentType, ...securityHeaders() };
     if (ext !== '.html') headers['Cache-Control'] = 'public, max-age=3600';
     res.writeHead(200, headers);
     res.end(data);
   });
 }
 
-// Clean page routes (no extensions)
-var PAGE_ROUTES = {
+const PAGE_ROUTES = {
   '/': 'index.html',
   '/login': 'auth.html',
 };
@@ -677,83 +732,68 @@ var PAGE_ROUTES = {
 // ============================================================
 // Router
 // ============================================================
-var server = http.createServer(function (req, res) {
-  var parsedUrl;
+const server = http.createServer((req, res) => {
+  let parsedUrl;
   try {
-    parsedUrl = new URL(req.url, 'http://localhost:' + PORT);
+    parsedUrl = new URL(req.url, `http://localhost:${PORT}`);
   } catch (e) {
     res.writeHead(400, securityHeaders());
     return res.end('Bad request');
   }
-  var method = req.method;
-  var pathname = parsedUrl.pathname;
+  const { method } = req;
+  let { pathname } = parsedUrl;
 
-  // Remove trailing slash (except root)
-  if (pathname.length > 1 && pathname.charAt(pathname.length - 1) === '/') {
+  if (pathname.length > 1 && pathname.endsWith('/')) {
     pathname = pathname.slice(0, -1);
   }
 
-  var handleError = function (err) {
-    console.error(err);
+  // Contesto per il logging
+  const clientIp = getClientIp(req);
+  const auth = getAuthUser(req);
+  const logUserId = auth?.user?.id || null;
+
+  const handleError = (err) => {
+    logError({
+      source: 'router',
+      method,
+      urlPath: pathname,
+      ip: clientIp,
+      userId: logUserId,
+      message: err.message || 'Errore sconosciuto',
+      stack: err.stack || '',
+      details: { statusCode: err.message === 'Invalid JSON' ? 400 : 500 },
+    });
     sendError(res, err.message === 'Invalid JSON' ? 400 : 500, 'Errore interno');
   };
 
   try {
-    // ---- Auth API ----
-    if (pathname === '/api/register' && method === 'POST') {
-      return handleRegister(req, res).catch(handleError);
-    }
-    if (pathname === '/api/login' && method === 'POST') {
-      return handleLogin(req, res).catch(handleError);
-    }
-    if (pathname === '/api/logout' && method === 'POST') {
-      return handleLogout(req, res);
-    }
-    if (pathname === '/api/me' && method === 'GET') {
-      return handleMe(req, res);
-    }
+    // Auth API
+    if (pathname === '/api/register' && method === 'POST') return handleRegister(req, res).catch(handleError);
+    if (pathname === '/api/login' && method === 'POST') return handleLogin(req, res).catch(handleError);
+    if (pathname === '/api/logout' && method === 'POST') return handleLogout(req, res);
+    if (pathname === '/api/me' && method === 'GET') return handleMe(req, res);
 
-    // ---- Pepis Chat API ----
-    if (pathname === '/api/chat' && method === 'POST') {
-      return handleChat(req, res).catch(handleError);
-    }
+    // Pepis Chat API
+    if (pathname === '/api/chat' && method === 'POST') return handleChat(req, res).catch(handleError);
 
-    // ---- Calorie API ----
-    if (pathname === '/api/state' && method === 'GET') {
-      return handleGetState(req, res);
-    }
-    if (pathname === '/api/goal' && method === 'POST') {
-      return handlePostGoal(req, res).catch(handleError);
-    }
-    if (pathname === '/api/entries' && method === 'POST') {
-      return handlePostEntry(req, res).catch(handleError);
-    }
-    if (pathname === '/api/reset' && method === 'POST') {
-      return handleReset(req, res);
-    }
+    // Calorie API
+    if (pathname === '/api/state' && method === 'GET') return handleGetState(req, res);
+    if (pathname === '/api/goal' && method === 'POST') return handlePostGoal(req, res).catch(handleError);
+    if (pathname === '/api/entries' && method === 'POST') return handlePostEntry(req, res).catch(handleError);
+    if (pathname === '/api/reset' && method === 'POST') return handleReset(req, res);
 
-    // DELETE /api/entries/:id
-    var deleteMatch = matchRoute(method, pathname, '/api/entries/:id', 'DELETE');
-    if (deleteMatch) {
-      return handleDeleteEntry(req, res, deleteMatch.id);
-    }
+    const deleteMatch = matchRoute(method, pathname, '/api/entries/:id', 'DELETE');
+    if (deleteMatch) return handleDeleteEntry(req, res, deleteMatch.id);
 
-    // ---- Page routes (clean URLs) ----
-    if (PAGE_ROUTES[pathname] && method === 'GET') {
-      return serveFile(res, path.join(PUBLIC_DIR, PAGE_ROUTES[pathname]));
-    }
+    // Page routes
+    if (PAGE_ROUTES[pathname] && method === 'GET') return serveFile(res, path.join(PUBLIC_DIR, PAGE_ROUTES[pathname]));
 
-    // ---- Static assets (css, js, images) ----
+    // Static assets
     if (method === 'GET') {
-      // Block direct access to .html files (force clean URLs)
-      if (path.extname(pathname) === '.html') {
-        res.writeHead(404, securityHeaders());
-        return res.end('Not found');
-      }
+      if (path.extname(pathname) === '.html') { res.writeHead(404, securityHeaders()); return res.end('Not found'); }
       return serveFile(res, path.join(PUBLIC_DIR, pathname));
     }
 
-    // Fallback
     res.writeHead(404, securityHeaders());
     res.end('Not found');
   } catch (err) {
@@ -761,6 +801,6 @@ var server = http.createServer(function (req, res) {
   }
 });
 
-server.listen(PORT, function () {
-  console.log('Calorie Tracker avviato su http://localhost:' + PORT);
+server.listen(PORT, () => {
+  console.log(`Calorie Tracker avviato su http://localhost:${PORT}`);
 });

@@ -25,6 +25,7 @@ data/*
 !data/.gitkeep
 
 # Logs
+logs/
 *.log
 
 # Temp

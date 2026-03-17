@@ -89,12 +89,17 @@
               <div class="pepis-welcome-emoji">&#127798;&#65039;</div>
               <h3 class="pepis-welcome-title">Ciao! Sono Pepis</h3>
               <p class="pepis-welcome-sub">Dimmi cosa hai mangiato e calcoler&#242; le calorie per te!</p>
+              <div class="pepis-welcome-hints">
+                <span class="pepis-welcome-hint">&#127835; Pasta al pomodoro</span>
+                <span class="pepis-welcome-hint">&#127829; Pizza margherita</span>
+                <span class="pepis-welcome-hint">&#127858; Pollo e verdure</span>
+              </div>
             </div>
           </div>
           <div class="pepis-input-area">
             <div class="meal-chips" id="meal-chips">
               <button type="button" class="meal-chip" data-meal="colazione">&#127749; Colazione</button>
-              <button type="button" class="meal-chip active" data-meal="pranzo">&#127869;&#65039; Pranzo</button>
+              <button type="button" class="meal-chip" data-meal="pranzo">&#127869;&#65039; Pranzo</button>
               <button type="button" class="meal-chip" data-meal="cena">&#127769; Cena</button>
               <button type="button" class="meal-chip" data-meal="spuntino">&#127822; Spuntino</button>
             </div>
@@ -118,9 +123,10 @@
           <div class="entries-scroll">
             <div id="entries-list"></div>
             <div id="empty-msg" class="empty-state">
-              <div class="empty-icon">&#127869;</div>
+              <div class="empty-icon">&#127869;&#65039;</div>
               <p>Nessun pasto registrato</p>
               <span>Chiedi a Pepis di calcolare le calorie</span>
+              <button class="empty-cta" id="empty-cta-btn">Vai da Pepis &#127798;&#65039;</button>
             </div>
           </div>
         </div>
@@ -144,6 +150,7 @@
 
   </div>
 
+  <div class="confetti-container" id="confetti-container" aria-hidden="true"></div>
   <script src="app.js"></script>
 </body>
 </html>
