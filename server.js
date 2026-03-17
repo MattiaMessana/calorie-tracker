@@ -617,6 +617,13 @@ function callLLM(prompt, context, callback) {
     },
   };
 
+  let callbackDone = false;
+  const safeCallback = (err, data) => {
+    if (callbackDone) return;
+    callbackDone = true;
+    callback(err, data);
+  };
+
   const apiReq = https.request(options, (apiRes) => {
     const chunks = [];
     apiRes.on('data', (chunk) => chunks.push(chunk));
@@ -624,13 +631,13 @@ function callLLM(prompt, context, callback) {
       const body = Buffer.concat(chunks).toString('utf-8');
       try {
         const response = JSON.parse(body);
-        if (response.error) return callback(new Error(response.error.message || 'Errore Groq API'));
+        if (response.error) return safeCallback(new Error(response.error.message || 'Errore Groq API'));
 
         let text = response.choices?.[0]?.message?.content;
-        if (!text) return callback(new Error('Risposta vuota'));
+        if (!text) return safeCallback(new Error('Risposta vuota'));
 
         text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-        callback(null, JSON.parse(text));
+        safeCallback(null, JSON.parse(text));
       } catch (e) {
         logError({
           source: 'callLLM',
@@ -638,23 +645,32 @@ function callLLM(prompt, context, callback) {
           stack: e.stack,
           details: { responseBody: body.substring(0, 500) },
         });
-        callback(new Error('Errore nel parsing della risposta AI'));
+        safeCallback(new Error('Errore nel parsing della risposta AI'));
       }
     });
   });
 
-  apiReq.on('error', (e) => callback(new Error(`Impossibile contattare Groq: ${e.message}`)));
-  apiReq.setTimeout(15000, () => { apiReq.destroy(); callback(new Error('Timeout dalla risposta AI')); });
+  apiReq.on('error', (e) => safeCallback(new Error(`Impossibile contattare Groq: ${e.message}`)));
+  apiReq.setTimeout(15000, () => { apiReq.destroy(); safeCallback(new Error('Timeout dalla risposta AI')); });
   apiReq.write(requestBody);
   apiReq.end();
 }
 
 function handleChat(req, res) {
   const user = requireAuth(req, res, true);
-  if (!user) return;
+  if (!user) return Promise.resolve();
 
   if (!GROQ_API_KEY || GROQ_API_KEY === 'la_tua_api_key_qui') {
-    return sendError(res, 500, 'API key Groq non configurata');
+    logError({
+      source: 'handleChat',
+      method: 'POST',
+      urlPath: '/api/chat',
+      ip: getClientIp(req),
+      userId: user.id,
+      message: 'API key Groq non configurata o mancante',
+      details: { keyPresent: !!GROQ_API_KEY, keyPlaceholder: GROQ_API_KEY === 'la_tua_api_key_qui' },
+    });
+    return Promise.resolve(sendError(res, 500, 'API key Groq non configurata'));
   }
 
   return parseBody(req).then((body) => {
@@ -672,33 +688,37 @@ function handleChat(req, res) {
       remaining: db.goalKcal - consumed,
     };
 
-    callLLM(message, context, (err, data) => {
-      if (err) {
-        logError({
-          source: 'handleChat',
-          method: 'POST',
-          urlPath: '/api/chat',
-          ip: getClientIp(req),
-          userId: user.id,
-          message: err.message,
-          stack: err.stack,
-          details: { userMessage: message },
+    return new Promise((resolve) => {
+      callLLM(message, context, (err, data) => {
+        if (err) {
+          logError({
+            source: 'handleChat',
+            method: 'POST',
+            urlPath: '/api/chat',
+            ip: getClientIp(req),
+            userId: user.id,
+            message: err.message,
+            stack: err.stack,
+            details: { userMessage: message },
+          });
+          sendError(res, 502, err.message);
+          return resolve();
+        }
+
+        const items = (data.items || []).map((item) => ({
+          name: item.name || '',
+          quantity: item.quantity || '',
+          calories: Math.round(item.calories || 0),
+        }));
+
+        const totalCalories = data.totalCalories || items.reduce((sum, it) => sum + it.calories, 0);
+
+        sendJson(res, 200, {
+          message: data.message || '',
+          items,
+          totalCalories: Math.round(totalCalories),
         });
-        return sendError(res, 502, err.message);
-      }
-
-      const items = (data.items || []).map((item) => ({
-        name: item.name || '',
-        quantity: item.quantity || '',
-        calories: Math.round(item.calories || 0),
-      }));
-
-      const totalCalories = data.totalCalories || items.reduce((sum, it) => sum + it.calories, 0);
-
-      sendJson(res, 200, {
-        message: data.message || '',
-        items,
-        totalCalories: Math.round(totalCalories),
+        resolve();
       });
     });
   });

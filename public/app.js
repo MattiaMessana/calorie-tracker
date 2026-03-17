@@ -519,7 +519,7 @@
           removeTyping();
           isWaiting = false;
           chatSend.disabled = false;
-          if (data?.error) { addBubble('pepis', 'Uff, ho avuto un problema \uD83D\uDE35'); return; }
+          if (data?.error) { addBubble('pepis', `Uff, ho avuto un problema: ${data.error} \uD83D\uDE35`); return; }
           if (data.message) addBubble('pepis', data.message);
           if (data.items?.length > 0) addCalorieCard(data, meal, text);
         })
