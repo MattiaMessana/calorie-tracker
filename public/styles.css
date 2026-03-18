@@ -54,13 +54,13 @@
 
 html {
   height: 100%;
-  height: -webkit-fill-available;
+  height: 100dvh;
   overflow: hidden;
 }
 
 body {
   height: 100%;
-  height: -webkit-fill-available;
+  height: 100dvh;
   overflow: hidden;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background: var(--bg);
@@ -80,7 +80,6 @@ body {
   flex-direction: column;
   height: 100vh;
   height: 100dvh;
-  height: -webkit-fill-available;
   max-width: 480px;
   margin: 0 auto;
   position: relative;
@@ -1336,17 +1335,6 @@ body {
 }
 
 /* ======== PWA STANDALONE ======== */
-/* CSS media query per standalone */
-@media (display-mode: standalone) {
-  .tab-bar {
-    padding-bottom: 0;
-  }
-}
-
-/* Classe aggiunta via JS per iOS standalone (navigator.standalone) */
-body.pwa-standalone .tab-bar {
-  padding-bottom: 0;
-}
 
 /* Tutti gli input devono permettere selezione testo */
 input, textarea {
