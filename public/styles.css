@@ -25,7 +25,7 @@
   --r-xs: 9px;
   --header-h: 56px;
   --stats-h: 64px;
-  --tabbar-h: 60px;
+  --tabbar-h: 49px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
@@ -552,8 +552,6 @@ body {
 
 /* ======== TAB BAR ======== */
 .tab-bar {
-  min-height: var(--tabbar-h);
-  padding-bottom: var(--safe-bottom);
   display: flex;
   border-top: 1px solid var(--border);
   background: rgba(8,8,26,0.96);
@@ -561,6 +559,9 @@ body {
   -webkit-backdrop-filter: blur(24px);
   flex-shrink: 0;
   position: relative;
+  /* Nessuna height fissa: i bottoni definiscono l'altezza (49px),
+     il padding-bottom aggiunge la safe area per la home indicator */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .tab-bar::before {
@@ -573,9 +574,10 @@ body {
 
 .tab-btn {
   flex: 1;
+  height: var(--tabbar-h);
   display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 0.12rem;
+  align-items: center; justify-content: flex-end;
+  gap: 0.15rem;
   border: none; background: transparent;
   color: var(--text-muted);
   font-size: 0.63rem; font-weight: 600;
@@ -583,7 +585,7 @@ body {
   -webkit-appearance: none;
   transition: color var(--dur-med) ease;
   position: relative;
-  padding: 0 0 2px;
+  padding: 0 0 6px;
 }
 
 .tab-btn svg {
