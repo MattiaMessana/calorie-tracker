@@ -1,8 +1,12 @@
-// Service Worker registration
+// PWA: Service Worker registration + standalone detection
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   });
+}
+// iOS standalone detection (navigator.standalone)
+if (window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches) {
+  document.body.classList.add('pwa-standalone');
 }
 
 (() => {

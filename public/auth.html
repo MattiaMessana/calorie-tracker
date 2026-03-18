@@ -295,6 +295,10 @@
       navigator.serviceWorker.register('/sw.js').catch(function() {});
     });
   }
+  // iOS standalone detection
+  if (window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches) {
+    document.body.classList.add('pwa-standalone');
+  }
   (function () {
     // If already logged in, redirect to home
     fetch('/api/me').then(function (r) { return r.json(); }).then(function (d) {

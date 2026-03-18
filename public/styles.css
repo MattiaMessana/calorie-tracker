@@ -1023,6 +1023,7 @@ body {
   gap: 0.45rem;
   overflow-x: auto;
   padding-bottom: 0.1rem;
+  padding-right: 0.85rem;
 }
 
 .meal-chips::-webkit-scrollbar { display: none; }
@@ -1335,11 +1336,16 @@ body {
 }
 
 /* ======== PWA STANDALONE ======== */
+/* CSS media query per standalone */
 @media (display-mode: standalone) {
-  /* In standalone non c'e' la barra di Safari, riduci il padding */
   .tab-bar {
     padding-bottom: 0;
   }
+}
+
+/* Classe aggiunta via JS per iOS standalone (navigator.standalone) */
+body.pwa-standalone .tab-bar {
+  padding-bottom: 0;
 }
 
 /* Tutti gli input devono permettere selezione testo */
