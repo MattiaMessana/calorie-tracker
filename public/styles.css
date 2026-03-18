@@ -1336,9 +1336,9 @@ body {
 
 /* ======== PWA STANDALONE ======== */
 @media (display-mode: standalone) {
-  /* Assicura che in modalita' standalone il body usi l'area sicura */
-  body {
-    padding-top: env(safe-area-inset-top, 0px);
+  /* In standalone non c'e' la barra di Safari, riduci il padding */
+  .tab-bar {
+    padding-bottom: 0;
   }
 }
 
