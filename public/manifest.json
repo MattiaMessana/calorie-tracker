@@ -1,0 +1,24 @@
+{
+  "name": "Calorie Tracker",
+  "short_name": "Calorie",
+  "description": "Il tuo diario alimentare intelligente con Pepis",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#08081a",
+  "theme_color": "#0a0a1a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

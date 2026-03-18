@@ -49,6 +49,7 @@
 *, *::before, *::after {
   margin: 0; padding: 0; box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 html {
@@ -68,6 +69,9 @@ body {
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
   width: 100%;
+  /* PWA standalone: no user select su elementi UI */
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* ======== APP SHELL ======== */
@@ -821,6 +825,8 @@ body {
 
 .chat-bubble-text {
   font-size: 0.9rem; font-weight: 400;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .user-bubble .chat-bubble-text { color: #fff; }
@@ -1067,6 +1073,8 @@ body {
   color: var(--text);
   font-size: 16px; font-family: inherit; font-weight: 400;
   outline: none; -webkit-appearance: none;
+  -webkit-user-select: text;
+  user-select: text;
   transition: border-color var(--dur-med) ease,
               box-shadow var(--dur-med) ease,
               background var(--dur-med) ease;
@@ -1324,6 +1332,20 @@ body {
   0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
   85%  { opacity: 1; }
   100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+}
+
+/* ======== PWA STANDALONE ======== */
+@media (display-mode: standalone) {
+  /* Assicura che in modalita' standalone il body usi l'area sicura */
+  body {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
+/* Tutti gli input devono permettere selezione testo */
+input, textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* ======== RESPONSIVE ======== */

@@ -1,3 +1,10 @@
+// Service Worker registration
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
 (() => {
   'use strict';
 
@@ -423,11 +430,31 @@
     }
 
     // ============================================================
-    // Safari mobile keyboard fix
+    // iOS keyboard fix — scroll chat input into view
     // ============================================================
     chatInput.addEventListener('focus', () => {
-      setTimeout(() => { scrollChat(); window.scrollTo(0, 0); }, 300);
+      // Delay per aspettare che la tastiera iOS si apra
+      setTimeout(() => {
+        chatInput.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        scrollChat();
+      }, 350);
     });
+
+    // visualViewport resize: la tastiera cambia il viewport visibile
+    if (window.visualViewport) {
+      let prevHeight = window.visualViewport.height;
+      window.visualViewport.addEventListener('resize', () => {
+        const currentHeight = window.visualViewport.height;
+        // Tastiera aperta (viewport si riduce)
+        if (currentHeight < prevHeight && document.activeElement === chatInput) {
+          setTimeout(() => {
+            chatInput.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            scrollChat();
+          }, 100);
+        }
+        prevHeight = currentHeight;
+      });
+    }
 
     chatMessages.addEventListener('touchmove', (e) => {
       e.stopPropagation();
